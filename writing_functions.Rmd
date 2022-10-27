@@ -1,0 +1,282 @@
+---
+title: "writing_functions"
+author: "Emily Potts"
+date: "2022-10-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(rvest)
+set.seed(1)
+```
+
+Computing the z-score of a list of numbers
+```{r}
+x_vec = rnorm(25, mean = 7, sd = 4)
+
+(x_vec - mean(x_vec)) / sd(x_vec)
+```
+
+Same example, but with iteration
+```{r}
+z_scores = function(x) {
+  
+  if (!is.numeric(x)) {
+    stop("Argument x should be numeric")
+  } else if (length(x) < 3) {
+    stop("Z scores cannot be computed for vectors with length less than 3")
+  }
+  
+  z = mean(x) / sd(x)
+  
+  z
+}
+
+z_scores(x = x_vec)
+z_scores(x = 1:10)
+z_scores(x = rbinom(1000, 1, .6))
+```
+
+
+Multiple outputs - means and sd from the vector output & return a list
+```{r}
+mean_and_sd = function(x) {
+  
+  if (!is.numeric(x)) {
+    stop("Argument x should be numeric")
+  } else if (length(x) == 1) {
+    stop("Cannot be computed for length 1 vectors")
+  }
+  
+  mean_x = mean(x)
+  sd_x = sd(x)
+
+  list(mean = mean_x, 
+       sd = sd_x)
+}
+```
+
+same but return multiple values in a data frame
+```{r}
+mean_and_sd = function(x) {
+  
+  if (!is.numeric(x)) {
+    stop("Argument x should be numeric")
+  } else if (length(x) == 1) {
+    stop("Cannot be computed for length 1 vectors")
+  }
+  
+  mean_x = mean(x)
+  sd_x = sd(x)
+
+  tibble(
+    mean = mean_x, 
+    sd = sd_x
+  )
+}
+
+mean_and_sd(x = x_vec)
+mean_and_sd(x = 1:10)
+mean_and_sd(x = rbinom(1000, 1, .6))
+```
+
+
+Multiple inputs and outputs
+```{r}
+sim_data = tibble(
+  x = rnorm(n = 25, mean = 7, sd = 4)
+)
+
+sim_data %>% 
+  summarize(
+    mu_hat = mean(x),
+    sigma_hat = sd(x)
+  )
+```
+
+Simulations - multiple inputs and outputs
+```{r}
+sim_mean_sd = function(n_obs, true_mean = 7, true_sd = 4) {
+  
+  sim_data = tibble(
+    x = rnorm(n_obs, mean = true_mean, sd = true_sd),
+  )
+  
+  sim_data %>% 
+    summarize(
+      mu_hat = mean(x),
+      sigma_hat = sd(x)
+    )
+}
+
+sim_mean_sd(n_obs = 25, true_mean = 100, true_sd = 1)
+```
+
+
+revisiting past examples - scraping amazon
+```{r}
+url = "https://www.amazon.com/product-reviews/B00005JNBQ/ref=cm_cr_arp_d_viewopt_rvwer?ie=UTF8&reviewerType=avp_only_reviews&sortBy=recent&pageNumber=1"
+
+dynamite_html = read_html(url)
+
+review_titles = 
+  dynamite_html %>%
+  html_nodes(".a-text-bold span") %>%
+  html_text()
+
+review_stars = 
+  dynamite_html %>%
+  html_nodes("#cm_cr-review_list .review-rating") %>%
+  html_text() %>%
+  str_extract("^\\d") %>%
+  as.numeric()
+
+review_text = 
+  dynamite_html %>%
+  html_nodes(".review-text-content span") %>%
+  html_text() %>% 
+  str_replace_all("\n", "") %>% 
+  str_trim()
+
+reviews = tibble(
+  title = review_titles,
+  stars = review_stars,
+  text = review_text
+)
+```
+
+write a function to get reviews
+```{r}
+read_page_reviews <- function(url) {
+  
+      html = read_html(url)
+      
+      review_titles = 
+        html %>%
+        html_nodes(".a-text-bold span") %>%
+        html_text()
+      
+      review_stars = 
+        html %>%
+        html_nodes("#cm_cr-review_list .review-rating") %>%
+        html_text() %>%
+        str_extract("^\\d") %>%
+        as.numeric()
+      
+      review_text = 
+        html %>%
+        html_nodes(".review-text-content span") %>%
+        html_text() %>% 
+        str_replace_all("\n", "") %>% 
+        str_trim() %>% 
+        str_subset("The media could not be loaded.", negate = TRUE) %>% 
+        str_subset("^$", negate = TRUE)
+      
+      tibble(
+        title = review_titles,
+        stars = review_stars,
+        text = review_text
+      )
+      
+  reviews
+}
+```
+
+testing that above works for single urls
+```{r}
+url = "https://www.amazon.com/product-reviews/B00005JNBQ/ref=cm_cr_arp_d_viewopt_rvwer?ie=UTF8&reviewerType=avp_only_reviews&sortBy=recent&pageNumber=3"
+
+read_page_reviews(url)
+```
+
+
+using above function to read in reviews from a few pages and combine the results
+```{r}
+url_base = "https://www.amazon.com/product-reviews/B00005JNBQ/ref=cm_cr_arp_d_viewopt_rvwer?ie=UTF8&reviewerType=avp_only_reviews&sortBy=recent&pageNumber="
+vec_urls = str_c(url_base, c(1, 2, 4, 5))
+
+dynamite_reviews = bind_rows(
+  read_page_reviews(vec_urls[1]),
+  read_page_reviews(vec_urls[2]),
+  read_page_reviews(vec_urls[3]),
+  read_page_reviews(vec_urls[4])
+)
+
+dynamite_reviews
+```
+
+LOTR data - original code
+```{r}
+fellowship_ring = readxl::read_excel("./LotR_Words_copy.xlsx", range = "B3:D6") %>%
+  mutate(movie = "fellowship_ring")
+
+two_towers = readxl::read_excel("./LotR_Words_copy.xlsx", range = "F3:H6") %>%
+  mutate(movie = "two_towers")
+
+return_king = readxl::read_excel("./LotR_Words_copy.xlsx", range = "J3:L6") %>%
+  mutate(movie = "return_king")
+
+lotr_tidy = bind_rows(fellowship_ring, two_towers, return_king) %>%
+  janitor::clean_names() %>%
+  gather(key = sex, value = words, female:male) %>%
+  mutate(race = str_to_lower(race)) %>% 
+  select(movie, everything())
+```
+
+LOTR data - iteration of above code
+```{r}
+lotr_load_and_tidy = function(path, range, movie_name) {
+  
+  df = readxl::read_excel(path, range = range) %>%
+    janitor::clean_names() %>%
+    gather(key = sex, value = words, female:male) %>%
+    mutate(race = str_to_lower(race),
+           movie = movie_name)
+  
+  df
+  
+}
+
+lotr_tidy = 
+  bind_rows(
+    lotr_load_and_tidy("./LotR_Words_copy.xlsx", "B3:D6", "fellowship_ring"),
+    lotr_load_and_tidy("./LotR_Words_copy.xlsx", "F3:H6", "two_towers"),
+    lotr_load_and_tidy("./LotR_Words_copy.xlsx", "J3:L6", "return_king")) %>%
+  select(movie, everything())
+```
+
+
+Functions as arguments
+```{r}
+x_vec = rnorm(25, 0, 1)
+
+my_summary = function(x, summ_func) {
+  summ_func(x)
+}
+
+my_summary(x_vec, sd)
+
+my_summary(x_vec, IQR)
+
+my_summary(x_vec, var)
+```
+
+Scoping and names:
+Examples like this are tricky, but emphasize an issue that comes up a lot in writing functions: you define a variable in your global environment and use it in your function, but it isn’t passed as an argument. This is easy to miss, especially when you go from code written in chunks to a function, and can be hard to track down if you empty your working directory or change a variable name. The best advice I have is to give your arguments useful names and think carefully about where everything is defined, and to periodically restart R and try everything again!
+
+
+```{r}
+f = function(x) {
+  z = x + y
+  z
+}
+
+x = 1
+y = 2
+
+f(x = y)
+```
+
+
