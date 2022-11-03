@@ -1,0 +1,146 @@
+---
+title: "simulation"
+author: "Emily Potts"
+date: "2022-11-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+
+set.seed(1)
+```
+
+# simulaton: mean & SD for one n
+
+```{r}
+sim_mean_sd = function(n, mu = 7, sigma = 4) {
+  
+  sim_data = tibble(
+    x = rnorm(n, mean = mu, sd = sigma),
+  )
+  
+  sim_data %>% 
+    summarize(
+      mu_hat = mean(x),
+      sigma_hat = sd(x)
+    )
+}
+```
+
+how did we use this before?
+```{r}
+sim_mean_sd(n = 30)
+```
+
+how can we use this now?
+
+let's start with a for loop
+```{r}
+output = vector("list", length = 100)
+
+for (i in 1:100) {
+  
+  output[[i]] = sim_mean_sd(n = 30)
+}
+
+sim_results = bind_rows(output)
+```
+
+let's use list columns instead
+```{r}
+sim_results_df = 
+  expand_grid(
+  sample_size = 30,
+  iteration = 1:100
+) %>% 
+  mutate(
+    estimate_df = map(sample_size, sim_mean_sd)
+  ) %>% 
+  unnest(estimate_df)
+```
+
+plots describing simulations results
+```{r}
+sim_results_df %>% 
+  ggplot(aes(x = mu_hat)) + geom_density()
+```
+
+```{r}
+sim_results_df %>% 
+  pivot_longer(
+    mu_hat:sigma_hat,
+    names_to = "parameter", 
+    values_to = "estimate") %>% 
+  group_by(parameter) %>% 
+  summarize(
+    emp_mean = mean(estimate),
+    emp_sd = sd(estimate)) %>% 
+  knitr::kable(digits = 3)
+```
+
+# simulaton: mean for several ns
+what about changing the sample size?
+```{r}
+sim_results_df = 
+  expand_grid(
+    sample_size = c(30, 60, 120, 240),
+    iteration = 1:100
+  ) %>% 
+  mutate(
+    estimate_df = map(sample_size, sim_mean_sd)
+  ) %>% 
+  unnest(estimate_df)
+sim_results_df
+```
+
+plot comparing distributions of mean estimates across sample sizes
+```{r}
+sim_results_df %>% 
+  mutate(
+    sample_size = str_c("n = ", sample_size),
+    sample_size = fct_inorder(sample_size)) %>% 
+  ggplot(aes(x = sample_size, y = mu_hat, fill = sample_size)) + 
+  geom_violin()
+```
+
+looking at empirical mean & variance of these estimates
+```{r}
+sim_results_df %>% 
+  pivot_longer(
+    mu_hat:sigma_hat,
+    names_to = "parameter", 
+    values_to = "estimate") %>% 
+  group_by(parameter, sample_size) %>% 
+  summarize(
+    emp_mean = mean(estimate),
+    emp_var = var(estimate)) %>% 
+  knitr::kable(digits = 3)
+```
+
+# varying two simulation parameters
+```{r, cache=TRUE}
+sim_results_df = 
+  expand_grid(
+    sample_size = c(30, 60, 120, 240),
+    true_sigma = c(6, 3),
+    iteration = 1:100
+  ) %>% 
+  mutate(
+    estimate_df = map2(.x = sample_size, .y = true_sigma, ~sim_mean_sd(n = .x, sigma = .y))
+  ) %>% 
+  unnest(estimate_df)
+sim_results_df
+```
+
+```{r}
+sim_results_df %>% 
+  mutate(
+    sample_size = str_c("n = ", sample_size),
+    sample_size = fct_inorder(sample_size)) %>% 
+  ggplot(aes(x = sample_size, y = mu_hat, fill = sample_size)) + 
+  geom_violin() + 
+  facet_grid(. ~ true_sigma)
+```
+
