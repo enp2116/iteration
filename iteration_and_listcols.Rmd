@@ -110,7 +110,7 @@ output = map(list_norms, median)
 ```
 
 map variants
-```{r}
+```{r, eval = FALSE}
 output = map_dbl(list_norms, median, .id = "input")
 
 output = map_dfr(list_norms, mean_and_sd, .id = "input")
